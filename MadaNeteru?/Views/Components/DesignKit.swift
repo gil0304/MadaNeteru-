@@ -116,17 +116,20 @@ struct Chevron: View {
 // MARK: - キャラクター
 //
 // ▼ キャラの入れ替え方
-//   ・画像を差し替える : Assets.xcassets/char-<名前>.imageset の PNG を置き換える
+//   ・画像を差し替える : Assets.xcassets/<名前>.imageset の PNG を置き換える
 //   ・画面のキャラを変える: 各画面で CharacterView(character: .xxx) の .xxx を変更する
 //                          （例: HomeView は .shiro、RulesView は .gil）
 // ▼ 新キャラを足す
-//   ・Assets に char-<新名>.imageset を追加 → 下の enum に case を1つ足すだけ
+//   ・Assets に <新名>.imageset を追加 → 下の enum に case を1つ足すだけ
 //
 enum AppCharacter: String {
     case yucha, aiueo, shiro, watami, gil, emily, kamimu, honopi, undefined
 
-    /// アセット名（assets/char-xxx.png 由来）。
-    var assetName: String? { self == .undefined ? nil : "char-\(rawValue)" }
+    /// 新しいステッカー風アセット名を優先し、旧 char- 系もフォールバックで許容する。
+    var assetNames: [String] {
+        guard self != .undefined else { return [] }
+        return [rawValue, "char-\(rawValue)"]
+    }
 
     var displayName: String {
         switch self {
@@ -151,21 +154,33 @@ struct CharacterView: View {
     var onDark: Bool = false
 
     var body: some View {
-        if let name = character.assetName, let ui = UIImage(named: name) {
-            // 元画像はそのまま（色変換なし）。ただし水彩タッチで一部が半透明なため、
-            // キャラの下に白い背景プレートを敷いて「透けて見える」のを防ぐ。
-            Image(uiImage: ui)
-                .renderingMode(.original)
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
+        if let name = character.assetNames.first(where: { UIImage(named: $0) != nil }),
+           let ui = UIImage(named: name) {
+            characterImage(uiImage: ui, assetName: name)
+        } else {
+            placeholder
                 .frame(width: height * 0.86, height: height)
+        }
+    }
+
+    @ViewBuilder
+    private func characterImage(uiImage: UIImage, assetName: String) -> some View {
+        let image = Image(uiImage: uiImage)
+            .renderingMode(.original)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: height * 0.86, height: height)
+
+        if assetName.hasPrefix("char-") {
+            // 旧 char- 系は半透明が強いので、従来どおり白プレート付きで表示する。
+            image
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: height * 0.12, style: .continuous))
                 .shadow(color: .black.opacity(0.10), radius: 3, y: 1)
         } else {
-            placeholder
-                .frame(width: height * 0.86, height: height)
+            // 新しいステッカー風画像はそのまま見せる。
+            image
         }
     }
 
