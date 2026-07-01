@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 enum Theme {
     // アクセント
@@ -30,15 +31,16 @@ enum Theme {
     static let warning = orange2
 
     // ニュートラル
-    static let groupedBg = Color(hex: "F2F2F7")
-    static let card = Color.white
-    static let label = Color(hex: "1C1C1E")
-    static let secondary = Color(hex: "8E8E93")
-    static let sectionLabel = Color(hex: "6D6D72")
-    static let separator = Color(hex: "E8E8EC")
-    static let chevron = Color(hex: "C7C7CC")
-    static let segmentBg = Color(hex: "E4E4EA")
-    static let legendBg = Color(hex: "EAEAEF")
+    static let groupedBg = Color(uiColor: .systemGroupedBackground)
+    static let card = Color(uiColor: .secondarySystemGroupedBackground)
+    static let label = Color(uiColor: .label)
+    static let bubbleText = Color(hex: "1C1C1E")
+    static let secondary = Color(uiColor: .secondaryLabel)
+    static let sectionLabel = Color(uiColor: .secondaryLabel)
+    static let separator = Color(uiColor: .separator)
+    static let chevron = Color(uiColor: .tertiaryLabel)
+    static let segmentBg = Color(uiColor: .tertiarySystemFill)
+    static let legendBg = Color(uiColor: .secondarySystemFill)
 
     // グラデーション
     /// ホームのヒーロー（夜→朝）。

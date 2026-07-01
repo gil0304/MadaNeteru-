@@ -34,7 +34,7 @@ struct OnboardingView: View {
                 SpeechBubble(tail: .bottomCenter) {
                     Text("はじめまして！\nあなたが寝坊しないように、\nわたしが見張ってるね。")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(Theme.label)
+                        .foregroundStyle(Theme.bubbleText)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                 }
@@ -100,7 +100,7 @@ struct OnboardingView: View {
                     SpeechBubble(tail: .leading, bg: Color(hex: "EAEAEF")) {
                         Text("アラームをちゃんと鳴らすのに、4つだけ許可してね！")
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Theme.label)
+                            .foregroundStyle(Theme.bubbleText)
                             .lineSpacing(3)
                     }
                     .padding(.bottom, 14)

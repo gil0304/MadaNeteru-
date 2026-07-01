@@ -81,7 +81,7 @@ struct EventsView: View {
         HStack(alignment: .bottom, spacing: 6) {
             CharacterView(character: .watami, height: 116)
             SpeechBubble(tail: .leading, radius: 16) {
-                Text(cameoText).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.label)
+                Text(cameoText).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(Theme.bubbleText)
             }
             .padding(.bottom, 18)
             Spacer(minLength: 0)

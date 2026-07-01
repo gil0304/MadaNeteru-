@@ -93,7 +93,7 @@ struct DefaultSettingsView: View {
         HStack(alignment: .bottom, spacing: 6) {
             CharacterView(character: .yucha, height: 110)
             SpeechBubble(tail: .leading, radius: 14) {
-                Text(text).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.label)
+                Text(text).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.bubbleText)
             }
             .padding(.bottom, 16)
             Spacer(minLength: 0)

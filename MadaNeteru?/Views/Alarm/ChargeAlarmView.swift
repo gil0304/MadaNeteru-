@@ -76,11 +76,11 @@ struct AlarmRingingView: View {
         switch kind {
         case .charge:
             styledText([("まだ充電してないよ〜！\n明日 ", nil), (timeStr, Theme.orange2), (" に予定あるのに！", nil)])
-                .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.label)
+                .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.bubbleText)
                 .multilineTextAlignment(.center).lineSpacing(3)
         case .wake:
             styledText([("朝だよ〜、起きて！\n", nil), (timeStr, Theme.orange2), (" に「\(title)」だよ！", nil)])
-                .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.label)
+                .font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.bubbleText)
                 .multilineTextAlignment(.center).lineSpacing(3)
         }
     }

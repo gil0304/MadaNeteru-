@@ -94,7 +94,7 @@ struct HomeView: View {
         if count == 0 {
             Text("明日は予定がないよ。\nゆっくり休んでね。")
                 .font(.system(size: 13.5, weight: .bold))
-                .foregroundStyle(Theme.label)
+                .foregroundStyle(Theme.bubbleText)
         } else if let ev = app.representativeEvent,
                   let wake = app.appliedAlarm(for: ev, type: .wakeUp) {
             styledText([
@@ -105,12 +105,12 @@ struct HomeView: View {
                 (" に起こすね。", nil)
             ])
             .font(.system(size: 13.5, weight: .bold))
-            .foregroundStyle(Theme.label)
+            .foregroundStyle(Theme.bubbleText)
             .lineSpacing(3)
         } else {
             styledText([("明日は予定が ", nil), ("\(count)件", Theme.orange), ("！\nアラームの準備をするね。", nil)])
                 .font(.system(size: 13.5, weight: .bold))
-                .foregroundStyle(Theme.label)
+                .foregroundStyle(Theme.bubbleText)
                 .lineSpacing(3)
         }
     }
