@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "char-aiueo.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

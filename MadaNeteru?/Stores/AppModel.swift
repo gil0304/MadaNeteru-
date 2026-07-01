@@ -9,6 +9,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import os
 
 @MainActor
 @Observable
@@ -38,6 +39,8 @@ final class AppModel {
 
     var isSyncing = false
     var lastSyncedAt: Date?
+    /// デモ起動（スクショ確認用）。true の間は実同期を行わずサンプルデータを保持する。
+    var demoMode = false
     /// 失敗・注意の通知（要件 17.1）。
     var warnings: [String] = []
 
@@ -62,14 +65,14 @@ final class AppModel {
     // MARK: - 全体デフォルト → GlobalDefaults
 
     var globalDefaults: GlobalDefaults {
+        // デザイン v4 のデフォルト設定は「時刻のみ・常時適用」。起床/前日/充電は常に
+        // 既定として効かせ、予定ごとのトグルで個別に抑制できるようにする。
         GlobalDefaults(
-            wake: settings.defaultWakeEnabled
-                ? TimeOfDay(hour: settings.defaultWakeHour, minute: settings.defaultWakeMinute) : nil,
-            previousDayCheck: settings.defaultPrevCheckEnabled
-                ? TimeOfDay(hour: settings.defaultPrevCheckHour, minute: settings.defaultPrevCheckMinute) : nil,
+            wake: TimeOfDay(hour: settings.defaultWakeHour, minute: settings.defaultWakeMinute),
+            previousDayCheck: TimeOfDay(hour: settings.defaultPrevCheckHour, minute: settings.defaultPrevCheckMinute),
             charge: TimeOfDay(hour: settings.defaultChargeHour, minute: settings.defaultChargeMinute),
             departure: nil,
-            reminderMinutesBefore: settings.defaultReminderEnabled ? settings.defaultReminderMinutesBefore : nil,
+            reminderMinutesBefore: nil,
             snoozeIntervalMinutes: settings.snoozeIntervalMinutes,
             snoozeEnabled: true,
             chargeEnabled: settings.chargeCheckEnabled
@@ -96,7 +99,35 @@ final class AppModel {
             user = u
             try? context.save()
         }
+        isSignedIn = user?.isSignedIn ?? false
     }
+
+#if DEBUG
+    /// デモ起動用: ネットワークなしでサンプル予定を投入し全画面を確認可能にする。
+    func loadDemoSeed() async {
+        demoMode = true
+        if let user {
+            user.googleAccountId = "demo-uid"
+            user.email = "demo@example.com"
+            user.name = "デモ"
+            user.calendarSyncEnabled = true
+        }
+        isSignedIn = true
+        let existing = (try? context.fetch(FetchDescriptor<CalendarEvent>())) ?? []
+        if existing.isEmpty {
+            for e in SampleData.events(userId: userId) { context.insert(e) }
+        }
+        try? context.save()
+        reloadEventsFromStore()
+        await rebuildAlarms()
+
+        // 検証用: スケジュール結果をログに出す。
+        let actives = activeScheduledAlarms()
+        let summary = actives.map { "\($0.alarmType.rawValue)@\(AppDate.dateTimeString($0.scheduledAt))[\($0.usedAlarmKit ? "AlarmKit" : "通知")]" }
+        os.Logger(subsystem: "madaneteru.demo", category: "alarms")
+            .log("DEMO scheduled \(actives.count, privacy: .public) alarms: \(summary.joined(separator: ", "), privacy: .public)")
+    }
+#endif
 
     func refreshAuthStates() async {
         alarmAuth = await alarmScheduler.authorizationState
@@ -139,6 +170,7 @@ final class AppModel {
                 user.updatedAt = .now
                 try? context.save()
             }
+            isSignedIn = true
             await sync()
         } catch {
             warnings.append("Google ログインに失敗しました: \(error.localizedDescription)")
@@ -150,14 +182,19 @@ final class AppModel {
         user?.googleAccountId = nil
         user?.calendarSyncEnabled = false
         try? context.save()
+        isSignedIn = false
+        // 表示中データをクリア（次のログインまで前ユーザーの予定を出さない）。
+        todayEvents = []; tomorrowEvents = []; upcomingEvents = []; missingTomorrow = []
     }
 
-    var isSignedIn: Bool { user?.isSignedIn ?? false }
+    /// 保存プロパティにして、変化が確実に @Observable として通知されるようにする
+    /// （RootView がこれを見てログイン/メインを切り替える）。
+    private(set) var isSignedIn = false
 
     // MARK: - 同期（要件 6.3 / 6.4 / 17.1）
 
     func sync() async {
-        guard isSignedIn else { return }
+        guard isSignedIn, !demoMode else { return }
         isSyncing = true
         defer { isSyncing = false }
 
@@ -265,7 +302,13 @@ final class AppModel {
 
     // MARK: - 取得・集計
 
+    /// 描画ホットパス（effectiveAlarms / tier）用のルールのキャッシュ。
+    /// 毎フレームの SwiftData フェッチを避け、メインスレッドの詰まりを防ぐ。
+    /// reloadEventsFromStore（＝同期/ルール変更のたび）で更新する。
+    private var rulesCache: [AlarmRule] = []
+
     func reloadEventsFromStore() {
+        rulesCache = allRules()
         let start = AppDate.startOfToday()
         let end = AppDate.startOfDay(daysFromNow: 8)
         let descriptor = FetchDescriptor<CalendarEvent>(
@@ -277,7 +320,7 @@ final class AppModel {
         todayEvents = all.filter { AppDate.isSameDay($0.startDateTime, AppDate.startOfToday()) }
         tomorrowEvents = all.filter { AppDate.isTomorrow($0.startDateTime) }
         missingTomorrow = AlarmRuleResolver.missingAlarmEvents(
-            on: AppDate.startOfTomorrow(), events: all, rules: allRules(), globals: globalDefaults
+            on: AppDate.startOfTomorrow(), events: all, rules: rulesCache, globals: globalDefaults
         )
     }
 
@@ -287,13 +330,86 @@ final class AppModel {
     }
 
     func rules(forEvent eventId: String) -> [AlarmRule] {
-        allRules().filter { $0.targetType == .event && $0.targetId == eventId }
+        rulesCache.filter { $0.targetType == .event && $0.targetId == eventId }
     }
 
     func effectiveAlarms(for event: CalendarEvent) -> [EffectiveAlarm] {
         AlarmRuleResolver.effectiveAlarms(
-            for: event, rules: allRules(), globals: globalDefaults, now: .distantPast
+            for: event, rules: rulesCache, globals: globalDefaults, now: .distantPast
         )
+    }
+
+    func appliedAlarm(for event: CalendarEvent, type: AlarmType) -> EffectiveAlarm? {
+        effectiveAlarms(for: event).first { $0.alarmType == type }
+    }
+
+    /// 適用アラームの出どころ（バッジ表示用）。
+    func tier(for alarm: EffectiveAlarm) -> RuleTier {
+        if alarm.ruleId.hasPrefix("global-") || alarm.ruleId.hasPrefix("missing-") { return .defaults }
+        if let rule = rulesCache.first(where: { $0.id == alarm.ruleId }) {
+            switch rule.targetType {
+            case .event:   return .individual
+            case .weekday: return .weekday
+            case .global:  return .defaults
+            }
+        }
+        return .defaults
+    }
+
+    /// ルール画面で代表表示する予定（明日→今日→今後 の最初の時刻つき予定）。
+    var representativeEvent: CalendarEvent? {
+        tomorrowEvents.first(where: { !$0.isAllDay })
+            ?? todayEvents.first(where: { !$0.isAllDay })
+            ?? upcomingEvents.first(where: { !$0.isAllDay })
+    }
+
+    /// 予定に対する種別アラームの有効/無効を切り替える（ルール/詳細画面のトグル）。
+    /// ON: 既に曜日/全体で出ていればそれを継承、無ければ既定時刻で個別アラームを作成。
+    /// OFF: 個別の無効ルールで抑制。
+    func setEventAlarmEnabled(event: CalendarEvent, type: AlarmType, enabled: Bool) {
+        // この種別の個別ルールを外す。
+        for r in rules(forEvent: event.id).filter({ $0.alarmType == type }) {
+            context.delete(r)
+        }
+        if enabled {
+            // 個別を外した状態で曜日/全体から出るか判定。出なければ既定時刻で作成。
+            let inherited = rulesCache.filter {
+                !($0.targetType == .event && $0.targetId == event.id && $0.alarmType == type)
+            }
+            let stillApplies = AlarmRuleResolver
+                .effectiveAlarms(for: event, rules: inherited, globals: globalDefaults, now: .distantPast)
+                .contains { $0.alarmType == type }
+            if !stillApplies {
+                let t = defaultTime(for: type)
+                context.insert(AlarmRule(
+                    userId: userId, targetType: .event, targetId: event.id,
+                    alarmType: type, alarmTimeType: .absolute,
+                    alarmHour: t.hour, alarmMinute: t.minute,
+                    snoozeEnabled: true, snoozeIntervalMinutes: settings.snoozeIntervalMinutes,
+                    isEnabled: true
+                ))
+            }
+        } else {
+            // 抑制（無効ルールで下位を上書き）。
+            context.insert(AlarmRule(
+                userId: userId, targetType: .event, targetId: event.id,
+                alarmType: type, alarmTimeType: .absolute,
+                alarmHour: 0, alarmMinute: 0, isEnabled: false
+            ))
+        }
+        try? context.save()
+        commitRuleChange()
+    }
+
+    /// 種別ごとの既定時刻（個別アラーム新規作成時のデフォルト）。
+    private func defaultTime(for type: AlarmType) -> TimeOfDay {
+        switch type {
+        case .wakeUp:           return TimeOfDay(hour: settings.defaultWakeHour, minute: settings.defaultWakeMinute)
+        case .previousDayCheck: return TimeOfDay(hour: settings.defaultPrevCheckHour, minute: settings.defaultPrevCheckMinute)
+        case .chargeCheck:      return TimeOfDay(hour: settings.defaultChargeHour, minute: settings.defaultChargeMinute)
+        case .departure:        return TimeOfDay(hour: 8, minute: 30)
+        default:                return TimeOfDay(hour: 7, minute: 0)
+        }
     }
 
     private func recomputeSummary() {
@@ -486,7 +602,11 @@ final class AppModel {
         hour: Int? = nil,
         minute: Int? = nil,
         relativeMinutes: Int? = nil
-    ) async {
+    ) {
+        // 同じ種別の個別ルールは置き換える（編集時に重複せず、時刻がすぐ反映される）。
+        for r in rules(forEvent: event.id).filter({ $0.alarmType == type }) {
+            context.delete(r)
+        }
         let rule = AlarmRule(
             userId: userId,
             targetType: .event,
@@ -501,10 +621,10 @@ final class AppModel {
         )
         context.insert(rule)
         try? context.save()
-        await afterRuleChange()
+        commitRuleChange()
     }
 
-    func setEventChargeCheck(event: CalendarEvent, enabled: Bool) async {
+    func setEventChargeCheck(event: CalendarEvent, enabled: Bool) {
         // 既存の event スコープ charge ルールを掃除してから設定。
         for r in rules(forEvent: event.id) where r.alarmType == .chargeCheck {
             context.delete(r)
@@ -529,11 +649,11 @@ final class AppModel {
             context.insert(rule)
         }
         try? context.save()
-        await afterRuleChange()
+        commitRuleChange()
     }
 
     /// 「この予定だけアラーム不要にする」: 全種別を無効ルールで抑制。
-    func setEventOptOut(event: CalendarEvent, optedOut: Bool) async {
+    func setEventOptOut(event: CalendarEvent, optedOut: Bool) {
         let types: [AlarmType] = [.wakeUp, .previousDayCheck, .chargeCheck, .departure, .eventReminder]
         // いったん既存の event ルールを削除
         for r in rules(forEvent: event.id) { context.delete(r) }
@@ -548,7 +668,7 @@ final class AppModel {
             }
         }
         try? context.save()
-        await afterRuleChange()
+        commitRuleChange()
     }
 
     func isEventOptedOut(_ event: CalendarEvent) -> Bool {
@@ -557,33 +677,38 @@ final class AppModel {
         return eventRules.filter { !$0.isEnabled }.count >= 5
     }
 
-    func removeRule(_ rule: AlarmRule) async {
+    func removeRule(_ rule: AlarmRule) {
         context.delete(rule)
         try? context.save()
-        await afterRuleChange()
+        commitRuleChange()
     }
 
     /// 未設定警告の操作（要件 10.3）。
-    func quickFixMissing(event: CalendarEvent, choice: MissingFixChoice) async {
+    func quickFixMissing(event: CalendarEvent, choice: MissingFixChoice) {
         switch choice {
         case .wakeAt(let h, let m):
-            await addEventAlarm(event: event, type: .wakeUp, timeType: .absolute, hour: h, minute: m)
+            addEventAlarm(event: event, type: .wakeUp, timeType: .absolute, hour: h, minute: m)
         case .relativeHours(let hours):
-            await addEventAlarm(event: event, type: .wakeUp, timeType: .relativeToEvent,
-                                relativeMinutes: hours * 60)
+            addEventAlarm(event: event, type: .wakeUp, timeType: .relativeToEvent,
+                          relativeMinutes: hours * 60)
         case .notTomorrow:
-            await setEventOptOut(event: event, optedOut: true)
+            setEventOptOut(event: event, optedOut: true)
         }
     }
 
-    private func afterRuleChange() async {
+    @ObservationIgnored private var rebuildTask: Task<Void, Never>?
+
+    /// データ変更を UI へ即時反映し、重いアラーム再構築はバックグラウンドで行う。
+    /// バインディング（トグル等）が即応するよう、集計の更新は同期で実施する。
+    private func commitRuleChange() {
         reloadEventsFromStore()
-        await rebuildAlarms()
+        rebuildTask?.cancel()
+        rebuildTask = Task { [weak self] in await self?.rebuildAlarms() }
     }
 
-    /// 全体デフォルト等の設定変更後に、予定の再評価とアラーム再構築を行う。
-    func refreshAfterSettingsChange() async {
-        await afterRuleChange()
+    /// 全体デフォルト等の設定変更後の再評価＋再構築。
+    func refreshAfterSettingsChange() {
+        commitRuleChange()
     }
 
     // MARK: - バックグラウンド更新（要件 6.4 / 10.2 / 11.1）
@@ -626,12 +751,27 @@ final class AppModel {
     // MARK: - 曜日ルール（要件 13.5）
 
     func weekdayRules(_ weekday: Weekday) -> [AlarmRule] {
-        allRules().filter { $0.targetType == .weekday && $0.targetId == String(weekday.rawValue) }
+        rulesCache.filter { $0.targetType == .weekday && $0.targetId == String(weekday.rawValue) }
+    }
+
+    /// その曜日にルール（有効なもの）があるか。曜日サークルの色分け用。
+    func weekdayHasRules(_ weekday: Weekday) -> Bool {
+        weekdayRules(weekday).contains { $0.isEnabled }
+    }
+
+    /// 「この曜日を有効」トグル。既存ルールの有効/無効を一括で切り替える。
+    func setWeekdayEnabled(_ weekday: Weekday, enabled: Bool) {
+        for rule in weekdayRules(weekday) {
+            rule.isEnabled = enabled
+            rule.updatedAt = .now
+        }
+        try? context.save()
+        commitRuleChange()
     }
 
     func setWeekdayRule(
         weekday: Weekday, type: AlarmType, enabled: Bool, hour: Int, minute: Int
-    ) async {
+    ) {
         let target = String(weekday.rawValue)
         let existing = allRules().first {
             $0.targetType == .weekday && $0.targetId == target && $0.alarmType == type
@@ -652,7 +792,7 @@ final class AppModel {
             context.insert(rule)
         }
         try? context.save()
-        await afterRuleChange()
+        commitRuleChange()
     }
 
     // MARK: - 履歴（要件 13.7）

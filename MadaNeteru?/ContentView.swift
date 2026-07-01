@@ -14,8 +14,18 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if app.settings.onboardingCompleted {
+            // ログイン済み かつ オンボーディング完了 のときだけメイン。
+            // ログアウトすると isSignedIn=false になり、ここが再評価されてログインへ戻る。
+            if app.isSignedIn && app.settings.onboardingCompleted {
+                #if DEBUG
+                if let screen = DemoLaunch.demoScreen {
+                    demoGallery(screen)
+                } else {
+                    MainTabView()
+                }
+                #else
                 MainTabView()
+                #endif
             } else {
                 OnboardingView()
             }
@@ -28,7 +38,7 @@ struct RootView: View {
             // 開発用: `-demoMode` 起動でオンボーディングを飛ばしモックログイン+同期。
             if ProcessInfo.processInfo.arguments.contains("-demoMode") {
                 app.settings.onboardingCompleted = true
-                if app.isSignedIn { await app.sync() } else { await app.signInWithGoogle() }
+                await app.loadDemoSeed()
                 return
             }
             #endif
@@ -54,9 +64,29 @@ struct RootView: View {
             }
         }
     }
+
+    #if DEBUG
+    /// 開発時にプッシュ遷移先の画面を単体スクショ確認するためのギャラリー。
+    @ViewBuilder
+    private func demoGallery(_ screen: String) -> some View {
+        switch screen {
+        case "default": NavigationStack { DefaultSettingsView() }
+        case "weekday": NavigationStack { WeekdayRulesView() }
+        case "detail":
+            if let ev = app.tomorrowEvents.first(where: { !$0.isAllDay }) {
+                NavigationStack { EventDetailView(event: ev) }
+            } else {
+                ProgressView()
+            }
+        case "charge": AlarmRingingView(kind: .charge)
+        case "wake": AlarmRingingView(kind: .wake)
+        default: MainTabView()
+        }
+    }
+    #endif
 }
 
-/// 要件 13章の 4 つの主要画面をタブで束ねる。
+/// デザイン v4 の 3 タブ（ホーム / 予定 / ルール）。
 struct MainTabView: View {
     @Environment(AppModel.self) private var app
     @State private var selection = DemoLaunch.initialTab
@@ -66,31 +96,29 @@ struct MainTabView: View {
             Tab("ホーム", systemImage: "house.fill", value: 0) {
                 HomeView()
             }
-            Tab("明日の予定", systemImage: "calendar", value: 1) {
-                TomorrowEventsView()
+            Tab("予定", systemImage: "calendar", value: 1) {
+                EventsView()
             }
-            Tab("設定", systemImage: "gearshape.fill", value: 2) {
-                SettingsHubView()
-            }
-            Tab("履歴", systemImage: "clock.arrow.circlepath", value: 3) {
-                AlarmHistoryView()
+            Tab("ルール", systemImage: "alarm.fill", value: 2) {
+                RulesView()
             }
         }
-        .tint(Theme.accent)
+        .tint(Theme.orange)
     }
 }
 
 /// 開発時にスクリーンショット確認するための初期タブ指定（本番では常に 0）。
 enum DemoLaunch {
-    static var initialTab: Int {
+    static func arg(_ flag: String) -> String? {
         #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-demoTab"), i + 1 < args.count {
-            return Int(args[i + 1]) ?? 0
-        }
+        let a = ProcessInfo.processInfo.arguments
+        if let i = a.firstIndex(of: flag), i + 1 < a.count { return a[i + 1] }
         #endif
-        return 0
+        return nil
     }
+    static var initialTab: Int { Int(arg("-demoTab") ?? "") ?? 0 }
+    static var demoScreen: String? { arg("-demoScreen") }
+    static var onboardStep: Int { Int(arg("-onboardStep") ?? "") ?? 0 }
 }
 
 // プレビュー用のインメモリ AppModel を供給。

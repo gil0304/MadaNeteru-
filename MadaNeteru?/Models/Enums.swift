@@ -59,6 +59,18 @@ enum AlarmType: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// デザイン(v4)の行アイコン絵文字。
+    var emoji: String {
+        switch self {
+        case .wakeUp:              return "☀️"
+        case .previousDayCheck:    return "🌙"
+        case .chargeCheck:         return "🔋"
+        case .departure:           return "🚶"
+        case .eventReminder:       return "🔔"
+        case .missingAlarmWarning: return "🔔"
+        }
+    }
+
     /// 要件 12章: AlarmKit（強い鳴動）で鳴らすべき種別か。
     var prefersAlarmKit: Bool {
         switch self {

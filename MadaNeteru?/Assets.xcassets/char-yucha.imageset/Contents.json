@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "char-yucha.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
