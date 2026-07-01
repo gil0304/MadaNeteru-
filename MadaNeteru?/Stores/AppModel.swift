@@ -230,7 +230,7 @@ final class AppModel {
             await rebuildAlarms()
         } catch {
             // 失敗時は前回同期データを使う（要件 17.1）。警告のみ。
-            warnings.append("カレンダー同期に失敗しました。前回のデータを表示します。")
+            warnings.append("カレンダー同期に失敗しました: \(error.localizedDescription)")
             reloadEventsFromStore()
             recomputeSummary()
         }
