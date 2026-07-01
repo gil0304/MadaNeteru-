@@ -17,7 +17,7 @@ enum AlarmRingKind: Identifiable, Hashable {
 
     var title: String { self == .charge ? "充電確認アラーム" : "起床アラーム" }
     var character: AppCharacter { self == .charge ? .yucha : .emily }
-    var caption: String? { self == .charge ? "充電を確認できると自動で止まります" : nil }
+    var caption: String? { self == .charge ? "充電するまで15分おきに鳴るよ。確認できたら自動で止まるよ。" : nil }
 }
 
 struct AlarmRingingView: View {
@@ -93,7 +93,7 @@ struct AlarmRingingView: View {
             VStack(spacing: 10) {
                 primaryButton("充電した", color: Theme.green) { Task { await charged() } }
                 HStack(spacing: 10) {
-                    glassButton("15分後に再通知") { dismiss() }
+                    glassButton("15分後に再通知") { Task { await app.snoozeChargeCheck(); dismiss() } }
                     glassButton("今日は不要") { Task { await app.chargeNotNeededTonight(); dismiss() } }
                 }
             }

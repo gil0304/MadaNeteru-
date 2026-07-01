@@ -450,37 +450,9 @@ final class AppModel {
             missingCheck: TimeOfDay(hour: settings.missingCheckHour, minute: settings.missingCheckMinute)
         )
 
-        let canUseAlarmKit = settings.useAlarmKit && alarmAuth == .authorized
-
         // 3. スケジュール + 永続化
         for planned in plan.alarms {
-            let viaAlarmKit = planned.useAlarmKit && canUseAlarmKit
-            var scheduledOK = true
-            do {
-                if viaAlarmKit {
-                    try await alarmScheduler.schedule(planned)
-                } else {
-                    try await notifications.schedule(planned)
-                }
-            } catch {
-                scheduledOK = false
-                warnings.append("「\(planned.title)」のアラーム作成に失敗しました")
-                // フォールバック: 通常通知（要件 17.1）
-                try? await notifications.schedule(planned)
-            }
-            let record = ScheduledAlarm(
-                userId: userId,
-                eventId: planned.eventId,
-                alarmRuleId: planned.ruleId,
-                alarmKitAlarmId: planned.id.uuidString,
-                alarmType: planned.alarmType,
-                title: planned.title,
-                eventTitle: planned.eventTitle,
-                scheduledAt: planned.fireDate ?? .now,
-                status: scheduledOK ? .scheduled : .failed,
-                usedAlarmKit: viaAlarmKit && scheduledOK
-            )
-            context.insert(record)
+            await scheduleAndPersist(planned)
         }
 
         // 4. 充電確認の記録（要件 11）
@@ -490,6 +462,40 @@ final class AppModel {
 
         try? context.save()
         recomputeSummary()
+    }
+
+    /// 1 件の PlannedAlarm をスケジュールし、ScheduledAlarm として永続化する。
+    /// AlarmKit 失敗時は通常通知にフォールバックする（要件 17.1）。
+    @discardableResult
+    private func scheduleAndPersist(_ planned: PlannedAlarm) async -> Bool {
+        let canUseAlarmKit = settings.useAlarmKit && alarmAuth == .authorized
+        let viaAlarmKit = planned.useAlarmKit && canUseAlarmKit
+        var scheduledOK = true
+        do {
+            if viaAlarmKit {
+                try await alarmScheduler.schedule(planned)
+            } else {
+                try await notifications.schedule(planned)
+            }
+        } catch {
+            scheduledOK = false
+            warnings.append("「\(planned.title)」のアラーム作成に失敗しました")
+            try? await notifications.schedule(planned)
+        }
+        let record = ScheduledAlarm(
+            userId: userId,
+            eventId: planned.eventId,
+            alarmRuleId: planned.ruleId,
+            alarmKitAlarmId: planned.id.uuidString,
+            alarmType: planned.alarmType,
+            title: planned.title,
+            eventTitle: planned.eventTitle,
+            scheduledAt: planned.fireDate ?? .now,
+            status: scheduledOK ? .scheduled : .failed,
+            usedAlarmKit: viaAlarmKit && scheduledOK
+        )
+        context.insert(record)
+        return scheduledOK
     }
 
     func activeScheduledAlarms() -> [ScheduledAlarm] {
@@ -548,6 +554,16 @@ final class AppModel {
             cc.alarmDismissed = true
         }
         await cancelTonightChargeAlarm()
+    }
+
+    /// 「15分後に再通知」: 充電確認を15分後にもう一度鳴らす。
+    /// 通常はチェーン（AlarmPlanner）が自動で再通知するが、チェーンを使い切った
+    /// 場合や手動で延ばしたい場合の保険として、単発の充電確認を積む。
+    func snoozeChargeCheck() async {
+        let planned = AlarmPlanner.chargeSnooze(globals: globalDefaults)
+        await scheduleAndPersist(planned)
+        try? context.save()
+        recomputeSummary()
     }
 
     private func cancelTonightChargeAlarm() async {
