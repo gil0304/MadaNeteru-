@@ -99,7 +99,7 @@ MadaNeteru?/
 
 - 認証: `GoogleAuthService`（同意 → コード交換 → アクセス/リフレッシュトークン、Keychain 保存、自動リフレッシュ）
 - 同期: `events.list`（初回 `timeMin/timeMax`、2回目以降 `syncToken`、`410 GONE` で full sync 再試行、ページング、終日/時刻あり判定）
-- コールバックは reversed client ID スキームを `ASWebAuthenticationSession` が直接処理（Info.plist の URL Type 登録は不要）
+- コールバックは reversed client ID スキームを使う。`Info.plist` に同じ URL Type を登録しておく必要がある
 
 `CalendarSyncService` プロトコルだけに依存するため、画面・ロジックは変更不要。
 

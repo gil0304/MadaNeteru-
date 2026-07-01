@@ -2,6 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.322873895616-vqaon87crcvl3oojbccs8linorq3gs5d</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>起床・充電確認・出発などの重要なアラームを、予定に合わせて確実に鳴らすために使用します。</string>
 	<key>UIBackgroundModes</key>
