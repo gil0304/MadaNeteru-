@@ -12,6 +12,11 @@ struct HomeView: View {
     @Environment(AppModel.self) private var app
     @State private var ringing: AlarmRingKind?
 
+    private var isNight: Bool {
+        let hour = Calendar.current.component(.hour, from: .now)
+        return !(5...16).contains(hour)
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -90,9 +95,15 @@ struct HomeView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.homeHero)
+        .background(isNight ? Theme.homeHeroNight : Theme.homeHeroMorning)
         .overlay(alignment: .topTrailing) {
-            MoonAnimationView(size: 68)
+            Group {
+                if isNight {
+                    MoonAnimationView(size: 68)
+                } else {
+                    SunAnimationView(size: 76)
+                }
+            }
                 .padding(.top, 18)
                 .padding(.trailing, 18)
         }

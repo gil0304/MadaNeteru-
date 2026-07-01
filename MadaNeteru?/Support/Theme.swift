@@ -43,13 +43,23 @@ enum Theme {
     static let legendBg = Color(uiColor: .secondarySystemFill)
 
     // グラデーション
-    /// ホームのヒーロー（夜→朝）。
-    static let homeHero = LinearGradient(
+    /// ホームのヒーロー（夜）。
+    static let homeHeroNight = LinearGradient(
         stops: [
             .init(color: Color(hex: "2E2A55"), location: 0.0),
             .init(color: Color(hex: "5B4E8C"), location: 0.48),
             .init(color: Color(hex: "C58BB0"), location: 0.88),
             .init(color: Color(hex: "F2C9A0"), location: 1.0)
+        ],
+        startPoint: .top, endPoint: .bottom
+    )
+    /// ホームのヒーロー（朝〜昼）。
+    static let homeHeroMorning = LinearGradient(
+        stops: [
+            .init(color: Color(hex: "8FD3FF"), location: 0.0),
+            .init(color: Color(hex: "B5E4FF"), location: 0.40),
+            .init(color: Color(hex: "FFD59A"), location: 0.88),
+            .init(color: Color(hex: "FFF1C8"), location: 1.0)
         ],
         startPoint: .top, endPoint: .bottom
     )

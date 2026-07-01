@@ -80,6 +80,56 @@ struct MoonAnimationView: View {
     ]
 }
 
+struct SunAnimationView: View {
+    private let canvasSize: CGFloat = 512
+    var size: CGFloat = 68
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let frame = frameIndex(for: context.date)
+            let rotation = Angle(degrees: frame * (45.0 / 359.0))
+
+            ZStack {
+                RaysShape()
+                    .stroke(Color(hex: "FBBF24"), style: StrokeStyle(lineWidth: 24, lineCap: .round))
+                    .frame(width: 360, height: 360)
+                    .rotationEffect(rotation)
+
+                SunCoreShape()
+                    .fill(
+                        RadialGradient(
+                            stops: [
+                                .init(color: Color(hex: "FBBF24"), location: 0.0),
+                                .init(color: Color(hex: "FBBF24"), location: 0.45),
+                                .init(color: Color(hex: "F7AE18"), location: 0.72),
+                                .init(color: Color(hex: "F59E0B"), location: 1.0),
+                            ],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 84
+                        )
+                    )
+                    .overlay {
+                        SunCoreShape()
+                            .stroke(Color(hex: "F7AE18"), lineWidth: 6)
+                    }
+                    .frame(width: 168, height: 168)
+            }
+            .frame(width: canvasSize, height: canvasSize)
+            .scaleEffect(size / canvasSize, anchor: .topLeading)
+            .frame(width: size, height: size, alignment: .topLeading)
+            .shadow(color: Color(hex: "FBBF24").opacity(0.20), radius: 10)
+            .accessibilityHidden(true)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func frameIndex(for date: Date) -> Double {
+        let progress = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 6.0) / 6.0
+        return progress * 359.0
+    }
+}
+
 private struct AnimatedStar {
     struct Keyframe {
         let frame: Double
@@ -160,6 +210,45 @@ private struct MoonShape: Shape {
                 CGPoint(x: 0.0 / 180.8, y: -43.0 / 178.4),
             ]
         )
+    }
+}
+
+private struct SunCoreShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path(ellipseIn: rect)
+    }
+}
+
+private struct RaysShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let c = CGPoint(x: rect.midX, y: rect.midY)
+        let inner: CGFloat = rect.width * 0.255
+        let outer: CGFloat = rect.width * 0.352
+        let diagonalsInner: CGFloat = rect.width * 0.180
+        let diagonalsOuter: CGFloat = rect.width * 0.249
+
+        path.move(to: CGPoint(x: c.x + inner, y: c.y))
+        path.addLine(to: CGPoint(x: c.x + outer, y: c.y))
+        path.move(to: CGPoint(x: c.x - inner, y: c.y))
+        path.addLine(to: CGPoint(x: c.x - outer, y: c.y))
+
+        path.move(to: CGPoint(x: c.x, y: c.y + inner))
+        path.addLine(to: CGPoint(x: c.x, y: c.y + outer))
+        path.move(to: CGPoint(x: c.x, y: c.y - inner))
+        path.addLine(to: CGPoint(x: c.x, y: c.y - outer))
+
+        path.move(to: CGPoint(x: c.x + diagonalsInner, y: c.y + diagonalsInner))
+        path.addLine(to: CGPoint(x: c.x + diagonalsOuter, y: c.y + diagonalsOuter))
+        path.move(to: CGPoint(x: c.x - diagonalsInner, y: c.y - diagonalsInner))
+        path.addLine(to: CGPoint(x: c.x - diagonalsOuter, y: c.y - diagonalsOuter))
+
+        path.move(to: CGPoint(x: c.x - diagonalsInner, y: c.y + diagonalsInner))
+        path.addLine(to: CGPoint(x: c.x - diagonalsOuter, y: c.y + diagonalsOuter))
+        path.move(to: CGPoint(x: c.x + diagonalsInner, y: c.y - diagonalsInner))
+        path.addLine(to: CGPoint(x: c.x + diagonalsOuter, y: c.y - diagonalsOuter))
+
+        return path
     }
 }
 
