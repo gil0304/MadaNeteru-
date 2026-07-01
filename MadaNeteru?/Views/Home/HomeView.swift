@@ -75,9 +75,13 @@ struct HomeView: View {
 
     private var heroCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SpeechBubble(tail: .bottomLeading) {
-                heroMessage
+            HStack(alignment: .top, spacing: 0) {
+                SpeechBubble(tail: .bottomLeading) {
+                    heroMessage
+                }
+                Spacer(minLength: 0)
             }
+
             HStack(alignment: .bottom, spacing: 8) {
                 CharacterView(character: .kamimu, height: 152, onDark: true)
                 CharacterView(character: .honopi, height: 152, onDark: true)
@@ -87,6 +91,11 @@ struct HomeView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.homeHero)
+        .overlay(alignment: .topTrailing) {
+            MoonAnimationView(size: 68)
+                .padding(.top, 18)
+                .padding(.trailing, 18)
+        }
     }
 
     @ViewBuilder private var heroMessage: some View {
